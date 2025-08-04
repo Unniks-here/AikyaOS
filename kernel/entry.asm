@@ -1,5 +1,6 @@
 ; entry.asm - 32-bit kernel entry
 BITS 32
+SECTION .text.start
 GLOBAL _start
 EXTERN kmain
 

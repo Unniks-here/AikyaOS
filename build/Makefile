@@ -7,11 +7,20 @@ AS = nasm
 CFLAGS = -ffreestanding -fno-pic -fno-stack-protector -m32 -nostdlib -Wall -Wextra
 LDFLAGS = -T linker.ld -nostdlib -m elf_i386
 
-all: aikyaos.iso
+# Calculate kernel size in sectors (rounded up)
+KERNEL_SECTORS = $(shell expr $$(stat -f%z kernel.bin 2>/dev/null || echo 512) / 512 + 1)
 
-boot.bin: ../boot/boot.asm
-	$(AS) -f bin $< -o $@
+all: aikyaos.img
 
+# ----------------------------
+# Bootloader
+# ----------------------------
+boot.bin: ../boot/boot.asm kernel.bin
+	$(AS) -f bin -DKERNEL_SECTORS=$(KERNEL_SECTORS) $< -o $@
+
+# ----------------------------
+# Kernel Objects
+# ----------------------------
 kernel.o: ../kernel/kernel.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -22,21 +31,37 @@ kernel.bin: kernel.o entry.o
 	$(LD) $(LDFLAGS) entry.o kernel.o -o kernel.elf
 	$(OBJCOPY) -O binary kernel.elf $@
 
-os-image.bin: boot.bin kernel.bin
-	cat $^ > $@
+# ----------------------------
+# Raw Bootable Image (.img)
+# ----------------------------
+aikyaos.img: boot.bin kernel.bin
+	cat boot.bin kernel.bin > aikyaos.img
 
-isodir:
+# ----------------------------
+# ISO Build (El Torito)
+# ----------------------------
+iso: aikyaos.img
 	mkdir -p isodir
-	cp os-image.bin isodir/boot.bin
+	cp aikyaos.img isodir/aikyaos.img
+	xorriso -as mkisofs -R \
+	    -b aikyaos.img \
+	    -no-emul-boot -boot-load-size 4 -boot-info-table \
+	    -o aikyaos.iso isodir
 
-aikyaos.iso: os-image.bin isodir
-	xorriso -as mkisofs -R -b boot.bin -no-emul-boot -o $@ isodir
+# ----------------------------
+# Run in QEMU
+# ----------------------------
+run-img: aikyaos.img
+	qemu-system-i386 -drive format=raw,file=aikyaos.img
 
-clean:
-	rm -f *.o *.bin *.elf aikyaos.iso
-	rm -rf isodir
-
-run: all
+run-iso: iso
 	qemu-system-i386 -cdrom aikyaos.iso
 
-.PHONY: all clean run
+# ----------------------------
+# Clean
+# ----------------------------
+clean:
+	rm -f *.o *.bin *.elf aikyaos.iso aikyaos.img
+	rm -rf isodir
+
+.PHONY: all clean run-img run-iso iso

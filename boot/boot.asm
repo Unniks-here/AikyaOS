@@ -2,7 +2,9 @@
 BITS 16
 ORG 0x7C00
 
-KERNEL_SECTORS equ 20           ; number of sectors to load
+%ifndef KERNEL_SECTORS
+%error "KERNEL_SECTORS must be defined by the build system"
+%endif
 
 start:
     cli

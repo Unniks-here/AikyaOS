@@ -16,3 +16,4 @@ align 16
 stack_bottom:
     resb 4096               ; 4 KiB stack
 stack_top:
+
